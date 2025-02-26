@@ -8,6 +8,19 @@ import matplotlib.pyplot as plt
 from abc_atlas_access.abc_atlas_cache.abc_project_cache import AbcProjectCache
 import concurrent.futures
 
+# Parameters
+n_permutations = 1000  # number of random permutations
+
+# Loading data
+expr_path = '/data/scRNA/ABCA/AIBS/AWS/expression_matrices/MERFISH-C57BL6J-638850-imputed/20240831/C57BL6J-638850-imputed-log2-wmeta.h5ad'
+adata = sc.read_h5ad(expr_path)
+
+# subsetting to one section
+adata = adata[adata.obs['brain_section_label'] == 'C57BL6J-638850.38'].copy()
+
+# fixing the data type
+adata.X = adata.X.astype("float32")
+
 modules_df = pd.read_csv(
     "/data/scRNA/ABCA/AIBS/AWS/expression_matrices/WMB-10Xv3/20230630/outputs/WMB-10Xv3-Isocortex-1-raw-sc-wgcna-modules.csv",
     index_col = "Unnamed: 0")
@@ -27,7 +40,7 @@ def compute_tau(adata_obj, module_obs_key):
     # Shift the values to be positive
     tau_df[module_obs_key] = tau_df[module_obs_key] - tau_df[module_obs_key].min() + 1e-6
     # Compute average expression per class
-    avg_expression = tau_df.groupby('class')[module_obs_key].mean()
+    avg_expression = tau_df.groupby('class', observed = False)[module_obs_key].mean()
     max_expr = avg_expression.max()
     normalized_expr = avg_expression / max_expr
     # Compute Tau: tau = sum(1 - normalized_expr)/(number_of_classes - 1)
@@ -44,8 +57,6 @@ def permutation_tau(seed):
     adata_perm = adata[:, random_genes].copy()
     
     # Preprocess the subset (normalization, log transform, scaling, PCA)
-    sc.pp.normalize_total(adata_perm, target_sum=1e4)
-    sc.pp.log1p(adata_perm)
     sc.pp.scale(adata_perm, max_value=10)
     sc.tl.pca(adata_perm, n_comps=2, svd_solver="arpack")
     
@@ -56,31 +67,23 @@ def permutation_tau(seed):
     # Compute and return the Tau score for this random gene set.
     return compute_tau(adata_perm, temp_key)
 
-# Parameters
-n_permutations = 1000  # number of random permutations
-
-'''
-MERFISH data
-'''
-
-expr_path = '/data/scRNA/ABCA/AIBS/AWS/expression_matrices/MERFISH-C57BL6J-638850/20230830/C57BL6J-638850-raw-wmeta.h5ad'
-adata = sc.read_h5ad(expr_path)
-
 # Prepare a list to hold results for each module.
-merfish_results = []
+imputed_results = []
 
 for module_name in set(all_modules) - {"grey"}:
 
     # Observed: Select the genes that belong to your module
     select_genes = modules_df[modules_df["module"] == module_name].index
+    n_genes_in_module = select_genes.shape[0]
+    print(f"Number of genes in module {module_name}: {n_genes_in_module}")
 
     # Compute the observed Tau score for the whole module
     common_genes = adata.var_names.intersection(select_genes)
     adata_subset = adata[:, common_genes].copy()
 
     # Preprocess: normalization, log, scaling, PCA
-    sc.pp.normalize_total(adata_subset, target_sum=1e4)
-    sc.pp.log1p(adata_subset)
+    # sc.pp.normalize_total(adata_subset, target_sum=1e4)
+    # sc.pp.log1p(adata_subset)
     sc.pp.scale(adata_subset, max_value=10)
     sc.tl.pca(adata_subset, n_comps=2, svd_solver="arpack")
 
@@ -106,14 +109,12 @@ for module_name in set(all_modules) - {"grey"}:
     p_value = (r + 1) / (n_permutations + 1)
     print(f"Permutation test p-value: {p_value:.5f}")
 
-    merfish_results.append({
+    results.append({
         "module": module_name,
-        "n_common_genes": len(common_genes),
-        "MERFISH_tau": observed_tau,
+        "n_imputed_genes": n_genes_in_module,
+        "imputed_tau": observed_tau,
         "p_value": p_value
     })
 
-merfish_results_df = pd.DataFrame(merfish_results)
-merfish_results_df.to_csv("/data/scRNA/ABCA/AIBS/AWS/expression_matrices/WMB-10Xv3/20230630/outputs/C57BL6J-638850-raw-sc-wgcna-ME-merfish-Tau.csv")
-
-del adata
+imputed_results_df = pd.DataFrame(imputed_results)
+imputed_results_df.to_csv("/data/scRNA/ABCA/AIBS/AWS/expression_matrices/WMB-10Xv3/20230630/outputs/C57BL6J-638850-imputed-log2-sc-wgcna-ME-merfish-imputedTau.csv")
