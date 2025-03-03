@@ -1,9 +1,0 @@
-/home/momo/miniforge3/envs/abca-env/lib/python3.10/site-packages/scanpy/preprocessing/_normalization.py:234: UserWarning: Some cells have zero counts
-  warn(UserWarning("Some cells have zero counts"))
-Number of genes in module brown: 192
-Observed Tau score for module brown: 0.328
-/home/momo/miniforge3/envs/abca-env/lib/python3.10/site-packages/scanpy/preprocessing/_normalization.py:234: UserWarning: Some cells have zero counts
-  warn(UserWarning("Some cells have zero counts"))
-Permutation test p-value: 0.15884
-Number of genes in module yellow: 181
-Observed Tau score for module yellow: 0.273
